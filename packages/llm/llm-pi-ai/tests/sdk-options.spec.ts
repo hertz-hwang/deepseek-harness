@@ -12,19 +12,24 @@ vi.mock('@earendil-works/pi-ai/api/openai-completions.lazy', () => ({
 }))
 
 import { PiAiAdapter } from '../src/adapter.ts'
-import { resolveProfiles } from '../src/config.ts'
+import {
+  DEFAULT_STREAM_IDLE_TIMEOUT_MS,
+  resolveProfiles,
+  type PiAiProviderProfile,
+} from '../src/config.ts'
 import { memoryAuth } from './auth-double.ts'
 
 afterEach(() => { streamSimple.mockReset() })
 
 /** A hand-declared OpenAI-compatible route with one fully described model. */
-function gatewayAdapter(): PiAiAdapter {
+function gatewayAdapter(profile: Partial<PiAiProviderProfile> = {}): PiAiAdapter {
   return new PiAiAdapter({
     profiles: () => resolveProfiles({
       'local-gateway': {
         api: 'openai-completions',
         baseURL: 'http://127.0.0.1:9/v1',
         models: [{ id: 'local-model', contextWindow: 8192, maxTokens: 1024 }],
+        ...profile,
       },
     }),
     resolveApiKey: () => Promise.resolve('test-key'),
@@ -71,5 +76,37 @@ describe('pi-ai SDK retry boundary', () => {
       contextWindow: 8192,
       maxTokens: 1024,
     })
+  })
+})
+
+describe('pi-ai SDK whole-request deadline', () => {
+  it('always forwards timeoutMs, so the SDK never falls back to its own default', async () => {
+    streamSimple.mockImplementation(() => { throw new Error('mock SDK boundary') })
+
+    await drain(gatewayAdapter())
+
+    // An omitted option would let the SDK apply its own ten-minute abort, which
+    // preempts the route's idle watchdog on a slow-prefill provider.
+    expect(streamSimple.mock.calls[0]?.[2]).toMatchObject({ timeoutMs: DEFAULT_STREAM_IDLE_TIMEOUT_MS })
+  })
+
+  it('tracks streamIdleTimeoutMs when the profile configures only the idle interval', async () => {
+    streamSimple.mockImplementation(() => { throw new Error('mock SDK boundary') })
+
+    await drain(gatewayAdapter({ streamIdleTimeoutMs: 86_400_000 }))
+
+    expect(streamSimple.mock.calls[0]?.[2]).toMatchObject({ timeoutMs: 86_400_000 })
+  })
+
+  it('keeps an explicitly configured timeoutMs independent of the idle interval', async () => {
+    streamSimple.mockImplementation(() => { throw new Error('mock SDK boundary') })
+
+    await drain(gatewayAdapter({ streamIdleTimeoutMs: 86_400_000, timeoutMs: 5_000 }))
+
+    expect(streamSimple.mock.calls[0]?.[2]).toMatchObject({ timeoutMs: 5_000 })
+  })
+
+  it.each([0, Number.NaN, 2_147_483_648])('refuses an unusable configured timeoutMs (%s)', (timeoutMs) => {
+    expect(() => resolveProfiles({ 'local-gateway': { timeoutMs } })).toThrow(/timeoutMs must be a positive finite/)
   })
 })

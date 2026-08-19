@@ -154,7 +154,13 @@ export interface PiAiProviderProfile {
   cacheRetention?: CacheRetention
   /** Streaming transport preference. */
   transport?: Transport
-  /** HTTP/provider SDK timeout in milliseconds. */
+  /**
+   * Whole-request timeout in milliseconds, enforced by the provider SDK. Absent,
+   * it follows `streamIdleTimeoutMs`: the SDK applies its own default (ten
+   * minutes) to any request that omits the option, which would abort a healthy
+   * provider still working through a long prefill well before the Harness idle
+   * watchdog this route configured.
+   */
   timeoutMs?: number
   /** WebSocket connection timeout in milliseconds. */
   websocketConnectTimeoutMs?: number
@@ -189,6 +195,8 @@ export interface ResolvedPiAiProviderProfile
   apiKeyEnv?: CredentialRef
   /** Positive finite provider-idle interval after defaulting. */
   streamIdleTimeoutMs: number
+  /** Positive finite whole-request timeout after defaulting to {@link ResolvedPiAiProviderProfile.streamIdleTimeoutMs}. */
+  timeoutMs: number
   /** Positive request-level base64 image payload bound after defaulting. */
   maxRequestImageBytes: number
   /** Positive total-pixel request-version budget after defaulting. */
@@ -420,6 +428,16 @@ export function resolveProfiles(
     if (!Number.isSafeInteger(requestImageMaxBytes) || requestImageMaxBytes <= 0) {
       throw new Error(`llm-pi-ai: provider "${provider}" requestImageMaxBytes must be a positive safe integer`)
     }
+    // The SDK's whole-request deadline must not preempt this route's idle
+    // watchdog: pi-ai omits the option when it is unset, and the SDK then
+    // applies its own ten-minute default, so a route that asked to tolerate a
+    // long provider stall would still be aborted at ten minutes.
+    const timeoutMs = source.timeoutMs ?? streamIdleTimeoutMs
+    if (!Number.isFinite(timeoutMs) || timeoutMs <= 0 || timeoutMs > MAX_TIMER_DELAY_MS) {
+      throw new Error(
+        `llm-pi-ai: provider "${provider}" timeoutMs must be a positive finite number no greater than ${MAX_TIMER_DELAY_MS}`,
+      )
+    }
     // Detached from the configuration object because pi-ai types `Model.input`
     // mutable. The schema's explicit default covers an absent key, so an empty
     // list here is always one someone typed — and unlike an entry's, nothing
@@ -451,6 +469,7 @@ export function resolveProfiles(
       displayName,
       ...apiKeyEnv === undefined ? {} : { apiKeyEnv: credentialRef(apiKeyEnv) },
       streamIdleTimeoutMs,
+      timeoutMs,
       maxRequestImageBytes,
       requestImagePixelBudget,
       requestImageMaxBytes,

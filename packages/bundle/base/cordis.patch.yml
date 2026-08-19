@@ -24,6 +24,16 @@
       config:
         root: ['.']
 
+    # Node's built-in fetch is undici, whose default 300000ms header and body
+    # deadlines are invisible to configuration and fire before any
+    # Harness-owned deadline — a provider needing longer than five minutes to
+    # produce its first byte dies as a retryable `TRANSPORT` failure and is
+    # re-sent. Disabling both leaves liveness to the caller that knows what it
+    # waits for: an LLM route's `streamIdleTimeoutMs`, a tool's declared
+    # `timeoutMs`.
+    - id: http-timeout-policy
+      name: '@deepseek-ai/dsh-http-timeout-policy'
+
     - id: llm
       name: '@deepseek-ai/dsh-llm'
 

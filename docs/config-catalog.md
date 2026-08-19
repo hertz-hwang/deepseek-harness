@@ -922,6 +922,28 @@ export interface Config {
 
 Source: [`packages/host/webserver/src/index.ts:59`](../packages/host/webserver/src/index.ts)
 
+<a id="deepseek-aidsh-http-timeout-policy"></a>
+
+## `@deepseek-ai/dsh-http-timeout-policy`
+
+```ts config-catalog
+/** Plugin config: the two undici transport deadlines this plugin owns. */
+export interface Config {
+  /**
+   * Milliseconds undici waits for response headers before aborting the request.
+   * `0` disables the deadline. Defaults to 0.
+   */
+  headersTimeoutMs?: number
+  /**
+   * Milliseconds undici waits between response body chunks before aborting the
+   * request. `0` disables the deadline. Defaults to 0.
+   */
+  bodyTimeoutMs?: number
+}
+```
+
+Source: [`packages/guard/http-timeout-policy/src/index.ts:38`](../packages/guard/http-timeout-policy/src/index.ts)
+
 <a id="deepseek-aidsh-invariants"></a>
 
 ## `@deepseek-ai/dsh-invariants`
@@ -1125,7 +1147,13 @@ export interface PiAiProviderProfile {
   cacheRetention?: CacheRetention
   /** Streaming transport preference. */
   transport?: Transport
-  /** HTTP/provider SDK timeout in milliseconds. */
+  /**
+   * Whole-request timeout in milliseconds, enforced by the provider SDK. Absent,
+   * it follows `streamIdleTimeoutMs`: the SDK applies its own default (ten
+   * minutes) to any request that omits the option, which would abort a healthy
+   * provider still working through a long prefill well before the Harness idle
+   * watchdog this route configured.
+   */
   timeoutMs?: number
   /** WebSocket connection timeout in milliseconds. */
   websocketConnectTimeoutMs?: number
@@ -1302,7 +1330,7 @@ export type PiAiThinkingFormat = NonNullable<OpenAICompletionsCompat['thinkingFo
 
 Depends on: `Api` (`@earendil-works/pi-ai`) · `CacheRetention` (`@earendil-works/pi-ai`) · `Model` (`@earendil-works/pi-ai`) · `ModelThinkingLevel` (`@earendil-works/pi-ai`) · `OpenAICompletionsCompat` (`@earendil-works/pi-ai`) · [`RetryPolicyConfig`](../packages/llm/llm/src/index.ts) · `ThinkingBudgets` (`@earendil-works/pi-ai`) · `Transport` (`@earendil-works/pi-ai`)
 
-Source: [`packages/llm/llm-pi-ai/src/config.ts:216`](../packages/llm/llm-pi-ai/src/config.ts)
+Source: [`packages/llm/llm-pi-ai/src/config.ts:224`](../packages/llm/llm-pi-ai/src/config.ts)
 
 <a id="deepseek-aidsh-llm-replay"></a>
 
